@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+type Options struct {
+	Target string
+}
+
 type HarError struct {
 	error
 }
@@ -26,7 +30,7 @@ func Fire(client *http.Client, request *har.Request) (err error) {
 	return
 }
 
-func Replay(hardata *har.Har) (err error) {
+func Replay(hardata *har.Har, opts *Options) (err error) {
 	entries := hardata.Log.Entries
 
 	if len(entries) == 0 {
