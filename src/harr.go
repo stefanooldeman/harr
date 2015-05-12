@@ -6,7 +6,6 @@ import (
 	"har"
 	"replay"
 	"strconv"
-	"sync"
 )
 
 func main() {
@@ -50,22 +49,12 @@ Options:
 		concurrency = repeat
 	}
 
-	var group sync.WaitGroup
-	queue := make(chan *har.Har, concurrency)
-	group.Add(repeat)
+	replayer := replay.NewAsyncReplayer(concurrency)
+	defer replayer.Close()
 
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			for job := range queue {
-				replay.Replay(job, replayOptions)
-				group.Done()
-			}
-		}()
-	}
+	replayer.ReplayTimes(repeat, result, replayOptions)
 
-	for i := 0; i < repeat; i++ {
-		queue <- result
-	}
+	replayer.Wait()
 
-	group.Wait()
+	return
 }
