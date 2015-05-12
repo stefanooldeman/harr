@@ -3,7 +3,6 @@ package replay
 import (
 	"har"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -38,22 +37,19 @@ func Replay(hardata *har.Har, opts *Options) (err error) {
 		return
 	}
 
-	epoch := entries[0].Started
-
-	var done sync.WaitGroup
-	done.Add(len(entries))
-
 	client := new(http.Client)
 
+	start := time.Now()
+	epoch := entries[0].Started
+
 	for _, entry := range entries {
-		delay := entry.Started.Sub(epoch)
-		go func(entry har.Entry) {
-			time.Sleep(delay)
-			err = Fire(client, &entry.Request)
-			done.Done()
-		}(entry)
+		now := time.Now()
+		delayFromStart := entry.Started.Sub(epoch)
+		delay := delayFromStart - now.Sub(start)
+		time.Sleep(delay)
+		err = Fire(client, &entry.Request)
+		// continue even when error
 	}
 
-	done.Wait()
 	return
 }
