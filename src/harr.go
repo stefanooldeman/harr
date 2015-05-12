@@ -52,9 +52,8 @@ Options:
 	replayer := replay.NewAsyncReplayer(concurrency)
 	defer replayer.Close()
 
-	replayer.ReplayTimes(repeat, result, replayOptions)
+	replayer.Replay(result, repeat, replayOptions)
 
 	replayer.Wait()
-
 	return
 }

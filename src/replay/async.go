@@ -2,7 +2,6 @@ package replay
 
 import (
 	"container/heap"
-	"fmt"
 	"har"
 	"net/http"
 	"sync"
@@ -12,7 +11,6 @@ import (
 type job struct {
 	request  har.Request
 	schedule time.Time
-	index    int
 }
 
 type WorkerQueue []*job
@@ -25,14 +23,10 @@ func (jq WorkerQueue) Less(i, j int) bool {
 
 func (jq WorkerQueue) Swap(i, j int) {
 	jq[i], jq[j] = jq[j], jq[i]
-	jq[i].index = i
-	jq[j].index = j
 }
 
 func (jq *WorkerQueue) Push(x interface{}) {
-	n := len(*jq)
 	job := x.(*job)
-	job.index = n
 	*jq = append(*jq, job)
 }
 
@@ -40,7 +34,6 @@ func (jq *WorkerQueue) Pop() interface{} {
 	old := *jq
 	n := len(old)
 	job := old[n-1]
-	job.index = -1 // for safety
 	*jq = old[0 : n-1]
 	return job
 }
@@ -77,7 +70,7 @@ func (ar *AsyncReplayer) Wait() {
 	ar.group.Wait()
 }
 
-func (ar *AsyncReplayer) Replay(hardata *har.Har, opts *Options) {
+func (ar *AsyncReplayer) scheduleReplay(initialDelay time.Duration, hardata *har.Har, opts *Options) {
 
 	entries := hardata.Log.Entries
 
@@ -96,16 +89,22 @@ func (ar *AsyncReplayer) Replay(hardata *har.Har, opts *Options) {
 		delay := delayFromStart - now.Sub(start)
 		heap.Push(&ar.Queue, &job{
 			request:  entry.Request,
-			schedule: now.Add(delay),
+			schedule: now.Add(delay).Add(initialDelay),
 		})
 	}
 
 	return
 }
 
-func (ar *AsyncReplayer) ReplayTimes(times int, hardata *har.Har, opts *Options) {
-	for i := 0; i < times; i++ {
-		ar.Replay(hardata, opts)
+func (ar *AsyncReplayer) Replay(hardata *har.Har, times int, opts *Options) {
+	if times <= 1 {
+		ar.scheduleReplay(0, hardata, opts)
+		return
+	}
+	avgspan := AverageTimespan(hardata)
+	step := avgspan / time.Duration(times-1)
+	for i := time.Duration(0); i < time.Duration(times); i++ {
+		ar.scheduleReplay(step*i, hardata, opts)
 	}
 }
 
@@ -130,7 +129,7 @@ func (ar *AsyncReplayer) worker(n int) {
 			time.Sleep(1 * time.Millisecond)
 			continue
 		}
-		fmt.Println(n, "got", j.request.URL)
+		//fmt.Println(n, "got", j.request.URL)
 		Fire(client, &j.request)
 		ar.group.Done()
 	}
